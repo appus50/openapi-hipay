@@ -1,0 +1,934 @@
+openapi: 3.0.0
+info:
+  title: POS Terminal API
+  description: |
+    ## Description
+    HTTP REST API intended to interact with payment terminals on which the HiPay application is installed.
+    ## Services
+    - Trigger in-store transactions and return the transaction results
+    ## Prerequisites
+    A working and stable internet connection for the payment terminal.
+    ## Communication mode
+    The communication with the payment terminal can only be set in asynchronous mode.<br/>
+    A valid payment request passes through the following steps:
+    1. Receipt of the payment request
+    1. Schema validation
+    1. Validation of the credentials (Authorization header)
+    1. Validation of the existence of the terminal
+    1. Terminal owner verification
+    1. Acknowledgement of the payment request
+    1. Transmission of the payment request to the terminal
+    1. Payment attempt with the terminal
+    1. Sending the payment result to the request emitter
+    ## Request authentication
+    An authentication header must be provided for every request.<br />
+    This API relies on **_HTTP Basic Authentication_**, in the form of `Authorization: Basic [[token]]` where `[[token]]` is set and provided by HiPay.
+    ## Response integrity
+    The payment result is sent to the emitter endpoint (JSON attribute `communication`.`notifications`.`emitter`) via an HTTP POST request.<br />
+    For security concerns, the request has an `x-hipay-signature` header which corresponds to a hash of the body.<br />
+    Thanks to this, the request integrity can be verified by comparing the value of this header with a hash of the body.
+    
+    The hash is the result of the sha256 algorithm (UTF-8) to the concatenation of:
+    - the body
+    - a passphrase set and provided by HiPay
+  contact:
+    email: pos@hipay.com
+  version: 1.0.0
+servers:
+  - url: https://stage-pos.hipay.com/v1/connector
+    description: Stage
+  - url: https://pos.hipay.com/v1/connector
+    description: Production
+paths:
+  /status/healthcheck:
+    get:
+      description: "Healthcheck"
+      summary: "Check if the API is up and running"
+      operationId: GetHealthcheck
+      tags:
+        - Status
+      responses:
+        200:
+          description: "The API is up and  running"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "The API is up and running!"
+  /status/version:
+    get:
+      description: "API Version"
+      summary: "Get the version of the API"
+      operationId: GetVersion
+      tags:
+        - Status
+      responses:
+        200:
+          description: "Current version of the API"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  version:
+                    type: string
+                    example: "1.0.0"
+  /transaction:
+    post:
+      tags:
+        - Merchant / Transaction
+      summary: "Initialize a new transaction"
+      operationId: PostTransaction
+      description: "Send a transaction request to a terminal to initiate a transaction without having to type and set manually the  information on the payment terminal"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TransactionRequest"
+      responses:
+        200:
+          description: OK - The transaction was successfully processed (**synchronous mode**)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransactionResult"
+        202:
+          description: OK - The transaction is being processed and was acknowledged (**asynchronous mode**)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransactionAcknowledgement"
+        400:
+          description: "KO - Bad Request: The request is incorrect/malformed or its content is invalid."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RequestTimeOutError"
+        401:
+          description: "KO - Unauthorized: Authentification is required for the requested operation."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UnauthorizedError"
+        403:
+          description: "KO - Forbidden: The provided credentials don't have the permission to process the requested operation."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ForbiddenError"
+        404:
+          description: "KO - Not Found: The requested ressource could not be found."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotFoundError"
+        409:
+          description: "KO - Conflict: A request could not be completed because of a conflict in the request."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConflictError"
+        422:
+          description: "KO - Unprocessable Content: The request is valid but the server is unable to process it."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UnprocessableContentError"
+        425:
+          description: "KO - Too early: A same request, with the identical payload, has already been received by the server in the last few seconds."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TooEarlyError"
+        500:
+          description: "KO - Internal Server Error: The server encountered an error while processing the request."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InternalServerError"
+
+        501:
+          description: "KO - Not Implemented: The server tried to execute a process which was not implemented."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InternalServerError"
+        502:
+          description: "KO - Not Implemented: The server tried to execute a process which was not implemented."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BadGatewayError"
+        503:
+          description: "KO - Service Unavailable: A service used to process the request is currently not available."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceUnavailableError"
+        504:
+          description: "KO - Gateway Timeout: The request took too long and was not able to be processed in time."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GatewayTimeoutError"
+components:
+  schemas:
+    BadRequestError:
+      title: "Error response"
+      description: "The server cannot or will not process the request due to something that is perceived to be a client error."
+      type: object
+      properties:
+        status:
+          description: "Status code."
+          type: integer
+          example: 400
+        code:
+          description: "Technical error code."
+          type: string
+          example: api.bad_request.error
+        message:
+          description: "Error message."
+          type: string
+          example: "The server cannot or will not process the request due to something that is perceived to be a client error"
+        description:
+          description: "Error description"
+          type: string
+          example: "The server cannot or will not process the request due to something that is perceived to be a client error"
+        details:
+          description: "Error details if exist"
+          type: object
+    UnauthorizedError:
+      title: "Unauthorized error response"
+      description: "The request has not been applied because it lacks valid authentication credentials for the target resource."
+      type: object
+      properties:
+        status:
+          description: "Status code."
+          type: integer
+          example: 401
+        code:
+          description: "Technical error code."
+          type: string
+          example: api-rules.unauthorized.error
+        message:
+          description: "Error message."
+          type: string
+          example: "Credentials are missing or invalid."
+        description:
+          description: "Error description"
+          type: string
+          example: "Credentials are missing or invalid."
+        details:
+          description: "Error details if exist"
+          type: object
+    ForbiddenError:
+      title: "Forbidden error response"
+      description: "The server understood the request, but is refusing to fulfill it."
+      type: object
+      properties:
+        status:
+          description: "Status code."
+          type: integer
+          example: 403
+        code:
+          description: "Technical error code."
+          type: string
+          example: api.forbidden.error
+        message:
+          description: "Error message."
+          type: string
+          example: "The access to the specified resource is forbidden."
+        description:
+          description: "Error description"
+          type: string
+          example: "The access to the specified resource is forbidden."
+        details:
+          description: "Error details if exist"
+          type: object
+    NotFoundError:
+      title: "Not found error response"
+      description: "The endpoint is valid but the resource itself does not exist."
+      type: object
+      properties:
+        status:
+          description: "Status code."
+          type: integer
+          example: 403
+        code:
+          description: "Technical error code."
+          type: string
+          example: api.not-found.error
+        message:
+          description: "Error message."
+          type: string
+          example: "The server cannot find the requested resource."
+        description:
+          description: "Error description"
+          type: string
+          example: "The server cannot find the requested resource."
+        details:
+          description: "Error details if exist"
+          type: object
+    RequestTimeOutError:
+      title: "Request time-out error response"
+      description: "The server timed out waiting for the request."
+      type: object
+      properties:
+        status:
+          description: "Status code."
+          type: integer
+          example: 408
+        code:
+          description: "Technical error code."
+          type: string
+          example: api.request-time-out.error
+        message:
+          description: "Error message."
+          type: string
+          example: "The server timed out waiting for the request to be processed."
+        description:
+          description: "Error description"
+          type: string
+          example: "The server timed out waiting for the request to be processed."
+        details:
+          description: "Error details if exist"
+          type: object
+    ConflictError:
+      title: "Conflict error response"
+      description: "The request could not be completed because of a conflict in the request."
+      type: object
+      properties:
+        status:
+          description: "Status code."
+          type: integer
+          example: 409
+        code:
+          description: "Technical error code."
+          type: string
+          example: api.conflict.error
+        message:
+          description: "Error message."
+          type: string
+          example: "The request could not be completed because of a conflict in the request."
+        description:
+          description: "Error description"
+          type: string
+          example: "The request could not be completed because of a conflict in the request."
+        details:
+          description: "Error details if exist"
+          type: object
+    UnprocessableContentError:
+      title: "Unprocessable Content error response"
+      description: "The request was well-formed but was unable to be followed due to semantic errors."
+      type: object
+      properties:
+        status:
+          description: "Status code."
+          type: integer
+          example: 422
+        code:
+          description: "Technical error code."
+          type: string
+          example: api.unprocessable-content.error
+        message:
+          description: "Error message."
+          type: string
+          example: "The server understands the content type and syntax of the request but was unable to process the contained instructions."
+        description:
+          description: "Error description"
+          type: string
+          example: "The server understands the content type and syntax of the request but was unable to process the contained instructions."
+        details:
+          description: "Error details if exist"
+          type: object
+    TooEarlyError:
+      title: "Too early error response"
+      description: "A request was received too early and is considered a duplicate."
+      type: object
+      properties:
+        status:
+          description: "Status code."
+          type: integer
+          example: 425
+        code:
+          description: "Technical error code."
+          type: string
+          example: api.too-early.error
+        message:
+          description: "Error message."
+          type: string
+          example: "A similar request has already been received recently."
+        description:
+          description: "Error description"
+          type: string
+          example: "A similar request has already been received recently."
+        details:
+          description: "Error details if exist"
+          type: object
+
+    InternalServerError:
+      title: "Internal server error response"
+      description: "The server encountered an unexpected condition that prevented it from fulfilling the request."
+      type: object
+      properties:
+        status:
+          description: "Status code."
+          type: integer
+          example: 500
+        code:
+          description: "Technical error code."
+          type: string
+          example: api.internal-server.error
+        message:
+          description: "Error message."
+          type: string
+          example: "The server has encountered a situation it does not know how to handle."
+        description:
+          description: "Error description"
+          type: string
+          example: "The server has encountered a situation it does not know how to handle."
+        details:
+          description: "Error details if exist"
+          type: object
+    BadGatewayError:
+      title: "Bad gateway error response"
+      description: "The server was acting as a gateway or proxy and received an invalid response from the upstream server."
+      type: object
+      properties:
+        status:
+          description: "Status code."
+          type: integer
+          example: 502
+        code:
+          description: "Technical error code."
+          type: string
+          example: api.bad-gateway.error
+        message:
+          description: "Error message."
+          type: string
+          example: "The server was acting as a gateway or proxy and received an invalid response from the upstream server."
+        description:
+          description: "Error description"
+          type: string
+          example: "The server was acting as a gateway or proxy and received an invalid response from the upstream server."
+        details:
+          description: "Error details if exist"
+          type: object
+    ServiceUnavailableError:
+      title: "Service unavailable error response"
+      description: "A service used to process the request is currently not available."
+      type: object
+      properties:
+        status:
+          description: "Status code."
+          type: integer
+          example: 503
+        code:
+          description: "Technical error code."
+          type: string
+          example: api.service-unavailable.error
+        message:
+          description: "Error message."
+          type: string
+          example: "A service used to process the request is currently not available."
+        description:
+          description: "Error description"
+          type: string
+          example: "A service used to process the request is currently not available."
+        details:
+          description: "Error details if exist"
+          type: object
+    GatewayTimeoutError:
+      title: "Gateway timeout error response"
+      description: "The request took too long and was not able to be processed in time."
+      type: object
+      properties:
+        status:
+          description: "Status code."
+          type: integer
+          example: 504
+        code:
+          description: "Technical error code."
+          type: string
+          example: api.gateway-timeout.error
+        message:
+          description: "Error message."
+          type: string
+          example: "The request took too long and was not able to be processed in time."
+        description:
+          description: "Error description"
+          type: string
+          example: "The request took too long and was not able to be processed in time."
+        details:
+          description: "Error details if exist"
+          type: object
+
+    TransactionRequest:
+      title: Transaction request
+      description: Transaction request
+      type: object
+      properties:
+        operation:
+          description: |
+            Operation to perform by the payment terminal:
+            - `Debit`: The customer will be debited with the transaction amount
+            - `Credit`: The customer will be credited with the transaction amount
+          type: string
+          enum: [Debit, Credit]
+          default: Debit
+          example: Debit
+        amount:
+          description: |
+            Amount expressed in the smallest unit of the currency<br />
+            Example: `100` for 1 euro
+          type: integer
+          minimum: 1
+          example: 13086
+        currency:
+          description: Three-character alphanumeric currency code as defined in [ISO 4217 - Currency code](https://www.six-group.com/dam/download/financial-information/data-center/iso-currrency/lists/list-one.xls) standard
+          type: string
+          minLength: 3
+          maxLength: 3
+          pattern: ^[A-Z]{3}$
+          enum: [EUR]
+          default: EUR
+          example: EUR
+        forceAuthorization:
+          description: |
+            Indicate whether an authorization request should be forced or not.<br />
+            We recommend keeping the default value, except for specific cases.
+          type: boolean
+          default: false
+        order:
+          description: Order information such as its unique identifier, the basket content, customer information, etc.
+          type: object
+          properties:
+            reference:
+              description: Unique identifier of the order in the ECR/OMS
+              type: string
+              minLength: 3
+              maxLength: 32
+              example: ORDER_1234_1745580980
+            basket:
+              description: Customer basket
+              type: array
+              items:
+                $ref: "#/components/schemas/BasketItem"
+            customer:
+              $ref: "#/components/schemas/Customer"
+            customData:
+              description: |
+                Additional data associated with the order, provided in the form of a JSON object with key-value pair attributes.<br />
+                You can use these data to submit custom values you wish to:
+                - show in the transaction details in HiPay back office
+                - get when requesting transaction details from our [Gateway API](https://developer.hipay.com/api-explorer/api-gateway)
+                - get back in our [server-to-server notifications](https://support.hipay.com/hc/en-us/articles/115000281049-What-is-a-server-to-server-notification)
+              type: object
+              format: json
+              example: {}
+          required:
+            - reference
+        communication:
+          description: Communication mode and protocol with the terminal
+          type: object
+          properties:
+            terminal:
+              description: Terminal information
+              type: object
+              properties:
+                id:
+                  description: Unique identifier of the terminal
+                  type: string
+                  example: 5O782H6TBTZL
+                model:
+                  description: Terminal model
+                  type: string
+                  example: PAX A920Pro
+                serial:
+                  description: Terminal serial number
+                  type: string
+                  example: "1234567890"
+              required:
+                - id
+            mode:
+              description: |
+                Communication mode with the terminal:
+                - `Async`: The request emitter (ECR/OMS) receives an acknowledgment of the transaction being processed and is notified of the result later.
+              type: string
+              enum: [Async]
+              default: Async
+              example: Async
+            emitter:
+              description: Emitter of the request (ECR/OMS)
+              type: string
+              example: WShop
+            notifications:
+              description: URL address of the ECR/OMS endpoint that will be notified by HiPay according to the payment scenario
+              type: object
+              properties:
+                emitter:
+                  description: URL address of an endpoint that will be notified with the transaction result in case of asynchronous mode communication
+                  type: string
+                  format: url
+                  example: https://notifs.hipay.com
+                serverToServer:
+                  description: |
+                    Override the default notification URL set in the configuration section of the merchant account in HiPay **Console** with a dedicated endpoint whose role is to process order-related notifications that will be sent by the HiPay platform ([server-to-server notifications](https://support.hipay.com/hc/en-us/articles/115000281049-What-is-a-server-to-server-notification))..
+                  type: string
+                  format: url
+                  example: https://notifs.hipay.com
+          required:
+            - terminal
+      required:
+        - amount
+        - order
+        - communication
+    TerminalTransactionStatus:
+      title: Terminal transaction status
+      description: Status of the transaction on the payment terminal
+      type: object
+      properties:
+        order:
+          description: Unique identifier of the order in the ECR/OMS
+          type: string
+          minLength: 3
+          maxLength: 32
+          example: ORDER_1234_1745580980
+        status:
+          type: string
+          description: "The status of the transaction"
+          enum:
+            - Accepted
+            - Busy
+            - Refused
+            - Duplicate
+          example: "Accepted"
+        message:
+          type: string
+          description: "A message related to the status of the transaction"
+          example: "The transaction has been received and will be processed."
+        passthrough:
+          description: String representation of the object containing custom data the API has sent and want to be sent back
+          type: string
+          example: '{ notifications: {"emitter": "https://your-shop.com/transaction-result"}}'
+        timestamp:
+          type: number
+          format: timestamp
+          description: Local date and time the transaction was acknowledged.
+          example: 1735729200000
+      required:
+        - order
+        - status
+        - timestamp
+    TerminalTransactionResult:
+      title: Terminal transaction result
+      description: Result of the transaction (once processed by the terminal)
+      type: object
+      properties:
+        references:
+          type: object
+          description: Unique identifiers of the order.
+          properties:
+            order:
+              type: string
+              description: Unique identifier of the order in the ECR/OMS.
+              example: ORDER_1234_1745580980
+            acquirer:
+              type: string
+              description: Unique acquirer's reference of the order (CB2A field 37).
+              example: 5gmlwwrcrhjl
+          required:
+            - order
+            - acquirer
+        result:
+          type: object
+          description: Transaction result.
+          properties:
+            status:
+              description: "Transaction status"
+              type: string
+              enum:
+                - Accepted
+                - Busy
+                - Refused
+                - Duplicate
+                - Success
+                - Aborted
+                - Error
+                - Unknown
+              example: Success
+            message:
+              description: "A message related to the status of the transaction"
+              type: string
+              example: "The transaction was successfully processed."
+            amount:
+              type: integer
+              description: Amount finally paid, expressed in the smallest unit of the currency.
+              example: 13086
+            currency:
+              description: Three-character alphanumeric currency code as defined in [ISO 4217 - Currency code](https://www.six-group.com/dam/download/financial-information/data-center/iso-currrency/lists/list-one.xls) standard
+              type: string
+              example: EUR
+            timestamp:
+              type: number
+              format: timestamp
+              description: Local date and time the transaction took place.
+              example: 1735729200000
+            receipt:
+              type: string
+              description: Customer receipt base64-encoded.
+              example: ICBDQVJURSBCQU5DQUlSRQogICAgICBTQU5TIENPTlRBQ1QKQTAwMDAwMDAwNDEwMTAKTWFzdGVyQ2FyZApMZSAwMS8wMS8yMDI1IGEgMTI6MDA6MDAKSElQQVkKOTJMRVZBTExPSVMKMTIzNDU2NyAxMjM0NTY3ODkwMTIzNDUgMTIzNDUKIyMjIyMjIyMjIyMjMDEyMwpENkM2OTFFMTJCNzBBQzQwCjAwMSAwMDEgMDAwMDEwIEMgQCAKTlVNIEFVVE8gOiAxMjM0NTYKTU9OVEFOVCA6CiAgICAgICAgIDk4LDc2IEVVUgpERUJJVAoKVElDS0VUIENMSUVOVApBIENPTlNFUlZFUgo=
+          required:
+            - status
+            - amount
+            - currency
+            - timestamp
+        card:
+          type: object
+          description: Information about the card used to pay.
+          properties:
+            pan:
+              type: string
+              description: Card number partially masked.
+              example: 123456......0123
+            expiration:
+              type: string
+              description: Card's expiration date.
+              example: 12/28
+          required:
+            - pan
+            - expiration
+        authorization:
+          type: object
+          description: Information about the authorization process.
+          properties:
+            number:
+              type: string
+              description: Authorization number.
+              example: 123456
+            code:
+              type: string
+              description: Authorization code returned by the acquirer/emitter.
+              example: 00
+          required:
+            - number
+            - code
+        processing:
+          type: object
+          description: Information about the transaction processing.
+          properties:
+            mode:
+              type: string
+              description: Technology used to read the card information.
+              example: ICC
+            aid:
+              type: string
+              description: Application ID.
+              example: A0000000041010
+            scheme:
+              type: string
+              description: Scheme.
+              example: CB
+          required:
+            - mode
+            - aid
+            - scheme
+        passthrough:
+          description: String representation of the object containing custom data the API has sent and want to be sent back
+          type: string
+          example: '{ notifications: {"emitter": "https://your-shop.com/transaction-result"}}'
+      required:
+        - references
+        - result
+        - card
+        - authorization
+        - processing
+    BasketItem:
+      title: Basket item
+      description: Item of a customer basket
+      type: object
+      properties:
+        reference:
+          description: Unique identifier of the product in the ECR/OMS
+          type: string
+          example: NF-a1690
+        name:
+          description: Product name
+          type: string
+          example: Red dress - Size S
+        type:
+          description: Product type
+          type: string
+          enum: [good, discount, fee]
+          default: good
+          example: good
+        price:
+          description: |
+            Product unit price expressed in the smallest unit of the currency<br />
+            Example: `100` for 1 euro
+          type: integer
+          minimum: 1
+          example: 6543
+        quantity:
+          description: Product quantity
+          type: integer
+          minimum: 1
+          example: 2
+      required:
+        - reference
+        - name
+        - price
+        - quantity
+    Customer:
+      title: Customer
+      description: Customer information
+      type: object
+      properties:
+        id:
+          description: Unique identifier of the customer in the merchant CRM
+          type: string
+          example: "1234567890"
+        firstName:
+          description: Customer's first name
+          type: string
+          example: Kathi
+        lastName:
+          description: Customer's last name
+          type: string
+          example: Payton
+        email:
+          description: Customer's email address
+          type: string
+          example: kathi.payton@gmail.com
+        phone:
+          description: Customer's phone number
+          type: string
+          example: +33601234567
+    TransactionResult:
+      title: Transaction result
+      description: The transaction result sent back to the emitter (OMS/ECR)
+      type: object
+      properties:
+        id:
+          description: "Unique identifier of the transaction response"
+          type: string
+          example: f102bc60-dc28-4ec8-ab20-9f6139a758d9
+        references:
+          description: "Unique identifiers of the order"
+          type: object
+          properties:
+            order:
+              type: string
+              description: "Unique identifier of the order in the ECR/OMS"
+              example: ORDER_1234_1745580980
+            acquirer:
+              description: "Unique acquirer's reference of the order (CB2A field 37)"
+              type: string
+              example: 5gmlwwrcrhjl
+          required:
+            - merchant
+        result:
+          description: Transaction result
+          type: object
+          properties:
+            status:
+              description: "Transaction status"
+              type: string
+              enum:
+                - Accepted
+                - Busy
+                - Refused
+                - Duplicate
+                - Success
+                - Aborted
+                - Error
+                - Unknown
+              example: Success
+            message:
+              description: "A message related to the status of the transaction"
+              type: string
+              example: "The transaction was successfully processed."
+            amount:
+              description: |
+                Amount finally paid, expressed in the smallest unit of the currency.<br />
+                Please notice it could be lower than the amount requested in case of a partial approval from the card emitter following an authorization request.
+              type: integer
+              example: 13086
+            currency:
+              description: Three-character alphanumeric currency code as defined in [ISO 4217 - Currency code](https://www.six-group.com/dam/download/financial-information/data-center/iso-currrency/lists/list-one.xls) standard
+              type: string
+              example: EUR
+            timestamp:
+              description: Local date and time the transaction took place
+              type: number
+              format: timestamp
+              example: 1735729200000
+            receipt:
+              description: Customer receipt base64-encoded
+              type: string
+              example: ICBDQVJURSBCQU5DQUlSRQogICAgICBTQU5TIENPTlRBQ1QKQTAwMDAwMDAwNDEwMTAKTWFzdGVyQ2FyZApMZSAwMS8wMS8yMDI1IGEgMTI6MDA6MDAKSElQQVkKOTJMRVZBTExPSVMKMTIzNDU2NyAxMjM0NTY3ODkwMTIzNDUgMTIzNDUKIyMjIyMjIyMjIyMjMDEyMwpENkM2OTFFMTJCNzBBQzQwCjAwMSAwMDEgMDAwMDEwIEMgQCAKTlVNIEFVVE8gOiAxMjM0NTYKTU9OVEFOVCA6CiAgICAgICAgIDk4LDc2IEVVUgpERUJJVAoKVElDS0VUIENMSUVOVApBIENPTlNFUlZFUgo=
+          required:
+            - status
+            - timestamp
+        card:
+          description: Information about the card used to pay
+          type: object
+          properties:
+            pan:
+              description: Card number partially masked
+              type: string
+              example: 123456......0123
+            expiration:
+              description: Card's expiration date
+              type: string
+              example: 12/28
+        authorization:
+          description: Information about the authorization process in case an authorization request was triggered
+          type: object
+          properties:
+            number:
+              description: Authorization number
+              type: string
+              example: 123456
+            code:
+              description: Authorization code returned by the acquirer/emitter
+              type: string
+              example: 00
+          required:
+            - number
+            - code
+        processing:
+          description: Information about the transaction processing
+          type: object
+          properties:
+            mode:
+              description: Technology used to read the card information
+              type: string
+              example: ICC
+            aid:
+              description: Application ID
+              type: string
+              example: A0000000041010
+            scheme:
+              description: Scheme
+              type: string
+              example: CB
+      required:
+        - id
+        - references
+        - result
+    TransactionAcknowledgement:
+      title: Transaction response - Asynchronous
+      description: The transaction response in **asynchronous mode**
+      type: object
+      properties:
+        id:
+          description: |
+            Unique identifier of the transaction request.
+            This ID will be provided in the notification once the transaction ends.
+          type: string
+          example: f102bc60-dc28-4ec8-ab20-9f6139a758d9
