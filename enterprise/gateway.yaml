@@ -1,7 +1,7 @@
 openapi: 3.0.0
 info:
   title: 'HiPay Enterprise Gateway API'
-  description: "The Gateway API allows you to get paid and manage orders and transactions.\n\nPlease note: this documentation describes the Gateway API parameters and response fields and allows you to test the platform in real time.\nThis page is to be used alongside the **[HiPay Enterprise Platform Overview documentation](/getting-started/platform-hipay-enterprise/overview/)**, which gives you more information and details on the HiPay Enterprise workflow. You may use both documents in parallel when integrating HiPay Enterprise.\n\n# Integration\n\n## Integration via our API\n\nIn this case, the payment page is hosted on your website, allowing you to have a unified, fully customized workflow. Please refer to the **Request New Order API (`POST Order`)** below for more information.\n\nPlease note that if you want to execute transactions with credit or debit card payment products, you will need to tokenize card numbers beforehand by using the HiPay Enterprise Tokenization API.\n\n# Managing transactions\n\nOnce a transaction is executed, you may need to perform operations on it, such as a refund, a capture, etc. To do so, please refer to the `maintenance` web service.\n\nYou can also get all transaction details at any time by leveraging the `transaction` web services.\n\nBesides, you may need to be automatically informed when a transaction status gets updated. To this end, you need to leverage server-to-server notifications. For more information, please check the [HiPay Enterprise Overview](/getting-started/platform-hipay-enterprise/overview/#server-to-server-notifications).\n\n# Web service information\n\n## Gateway API base URLs\n\n| Environment | Base URL |\n| --- | --- |\n| Stage | [https://stage-secure-gateway.hipay-tpp.com/rest/](https://stage-secure-gateway.hipay-tpp.com/rest/) |\n| Production | [https://secure-gateway.hipay-tpp.com/rest/](https://secure-gateway.hipay-tpp.com/rest/) |\n\n## Authentication\n\nAll requests to the HiPay Enterprise API require identification through *HTTP Basic Authentication*. Your API credentials can be found in the Integration section of your HiPay Enterprise back office. Most HTTP clients (including web browsers) have built-in support for HTTP basic authentication. If not, the following header must be included in all HTTP requests.\n\n`Authorization: Basic base64('API login>:<API password>')`"
+  description: "## Version 1.2.3 - January 19, 2026\n\nThe Gateway API allows you to get paid and manage orders and transactions.\n\nPlease note: this documentation describes the Gateway API parameters and response fields and allows you to test the platform in real time.\nThis page is to be used alongside the **[HiPay Enterprise Platform Overview documentation](/getting-started/platform-hipay-enterprise/overview/)**, which gives you more information and details on the HiPay Enterprise workflow. You may use both documents in parallel when integrating HiPay Enterprise.\n\n# Integration\n\n## Integration via our API\n\nIn this case, the payment page is hosted on your website, allowing you to have a unified, fully customized workflow. Please refer to the **Request New Order API (`POST Order`)** below for more information.\n\nPlease note that if you want to execute transactions with credit or debit card payment products, you will need to tokenize card numbers beforehand by using the HiPay Enterprise Tokenization API.\n\n# Managing transactions\n\nOnce a transaction is executed, you may need to perform operations on it, such as a refund, a capture, etc. To do so, please refer to the `maintenance` web service.\n\nYou can also get all transaction details at any time by leveraging the `transaction` web services.\n\nBesides, you may need to be automatically informed when a transaction status gets updated. To this end, you need to leverage server-to-server notifications. For more information, please check the [HiPay Enterprise Overview](/getting-started/platform-hipay-enterprise/overview/#server-to-server-notifications).\n\n# Web service information\n\n## Gateway API base URLs\n\n| Environment | Base URL |\n| --- | --- |\n| Stage | [https://stage-secure-gateway.hipay-tpp.com/rest/](https://stage-secure-gateway.hipay-tpp.com/rest/) |\n| Production | [https://secure-gateway.hipay-tpp.com/rest/](https://secure-gateway.hipay-tpp.com/rest/) |\n\n## Authentication\n\nAll requests to the HiPay Enterprise API require identification through *HTTP Basic Authentication*. Your API credentials can be found in the Integration section of your HiPay Enterprise back office. Most HTTP clients (including web browsers) have built-in support for HTTP basic authentication. If not, the following header must be included in all HTTP requests.\n\n`Authorization: Basic base64('API login>:<API password>')`"
   contact:
     email: pi-commerce@hipay.com
   version: 1.2.3
@@ -76,7 +76,7 @@ paths:
       tags:
         - payments
       summary: 'Creates an order and a transaction based on payment details'
-      description: "This service allows you to execute transactions through API with no need\nto redirect your customer to the payment page hosted by HiPay. This\nservice supports payments with credit or debit cards as well as\nalternative payment methods.\n\nIn **order** to make a payment with a credit or debit card, a token must\nhave been generated beforehand. In fact, this service cannot receive\ncredit or debit card numbers in clear. Instead, you must provide this\nservice with a token associated to a card number. Use the HiPay\nEnterprise SDK for JavaScript in order to generate tokens.\n\nIf you need to make payments with alternative payment methods, you can\nuse this service directly. Note that the use of some alternative payment\nproducts implies that you redirect your user to an external URL. In such\na case, the `forwardUrl` parameter will be set with the appropriate URL.\nMoreover, the activation of *3-D Secure* also implies a redirection of\nyour customer."
+      description: "This service allows you to execute transactions through API with no need\n    to redirect your customer to the payment page hosted by HiPay. This\n    service supports payments with credit or debit cards as well as\n    alternative payment methods.\n\n    In **order** to make a payment with a credit or debit card, a token must\n    have been generated beforehand. In fact, this service cannot receive\n    credit or debit card numbers in clear. Instead, you must provide this\n    service with a token associated to a card number. Use the HiPay\n    Enterprise SDK for JavaScript in order to generate tokens.\n\n    If you need to make payments with alternative payment methods, you can\n    use this service directly. Note that the use of some alternative payment\n    products implies that you redirect your user to an external URL. In such\n    a case, the `forwardUrl` parameter will be set with the appropriate URL.\n    Moreover, the activation of *3-D Secure* also implies a redirection of\n    your customer."
       operationId: requestNewOrder
       requestBody:
         description: 'Order information'
@@ -155,7 +155,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-      deprecated: true
       security:
         -
           basicAuth: []
@@ -201,10 +200,103 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-      deprecated: true
       security:
         -
           basicAuth: []
+  /v3/transaction/update:
+    post:
+      tags:
+        - transaction
+      summary: 'Update the provider code and status of a transaction'
+      operationId: d649757742ff9a2ae6da4e7499520d58
+      parameters:
+        -
+          name: trxid
+          in: query
+          description: 'Unique transaction Id'
+          required: true
+          schema:
+            type: integer
+          example: '76543210'
+        -
+          name: provider_code
+          in: query
+          description: 'Provider code in string format'
+          required: true
+          schema:
+            type: string
+          example: '100000'
+        -
+          name: provider_status
+          in: query
+          description: 'Provider status in integer format'
+          required: true
+          schema:
+            type: integer
+          example: '3010006'
+      responses:
+        '200':
+          description: 'Transaction update successfully.'
+        '400':
+          description: 'The request was rejected due to a validation error.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: 'An authentication error occurred/invalid credentials.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: 'Transaction was not found.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+        -
+          apiKey: []
+  '/v3/transaction/notify/{trxId}':
+    post:
+      tags:
+        - transaction
+      summary: 'Generates and send a merchant notification for a transaction'
+      operationId: f82296ffee93c7234b45bf118237c6fe
+      parameters:
+        -
+          name: trxId
+          in: path
+          description: 'Unique transaction Id'
+          required: true
+          schema:
+            type: integer
+          example: '76543210'
+      responses:
+        '200':
+          description: 'Transaction notified successfully.'
+        '401':
+          description: 'An authentication error occurred/invalid credentials.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: 'Transaction was not found.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: 'Technical error.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+        -
+          apiKey: []
 components:
   schemas:
     Maintenance:
@@ -614,7 +706,7 @@ components:
               example: visa
               x-sort: 20
             browser_info:
-              description: "**This parameter is specific to the PSD2.**\n\nBrowser Information"
+              description: "**This parameter is specific to the PSD2.**\n\n    Browser Information"
               required:
                 - language
               properties:
@@ -648,7 +740,7 @@ components:
                   minimum: 1
                   example: fr-FR
                 color_depth:
-                  description: "Value representing the bit depth of the colour palette for displaying images, in bits per pixel.\n\n* `1` : 1 bit\n* `4` : 4 bits\n* `8` : 8 bits\n* `15` : 15 bits\n* `16` : 16 bits\n* `24` : 24 bits\n* `32` : 32 bits\n* `48` : 48 bits"
+                  description: "Value representing the bit depth of the colour palette for displaying images, in bits per pixel.\n     * `1` : 1 bit\n     * `4` : 4 bits\n     * `8` : 8 bits\n     * `15` : 15 bits\n     * `16` : 16 bits\n     * `24` : 24 bits\n     * `32` : 32 bits\n     * `48` : 48 bits"
                   type: integer
                   maximum: 2
                   minimum: 1
@@ -1145,7 +1237,7 @@ components:
           example: Doe
           x-sort: 235
         card_holder:
-          description: "**This parameter is specific to provider PAYON.**\n\n    The customer’s card holder."
+          description: "**Description**\n\n    The customer’s card holder."
           type: string
           example: 'Cathy Doe'
           x-sort: 236
@@ -1348,6 +1440,14 @@ components:
           additionalProperties:
             default: '0'
           x-sort: 195
+        provider_data:
+          required:
+            - paypal_id
+          properties:
+            paypal_id:
+              description: 'Paypal transaction ID'
+              type: string
+          type: object
         iban:
           description: "**This parameter is specific to the SEPA Direct Debit payment product.**\n\n    International Bank Account Number (IBAN)."
           type: string
